@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "415326644944",
+    "project_id": "communityknowledgesharing",
+    "storage_bucket": "communityknowledgesharing.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:415326644944:android:a3d9855ff4aba1db8a0cd5",
+        "android_client_info": {
+          "package_name": "com.example.communityknowledgesharing"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKZsRLU__8bXTJjr9q0UHQGsHNdlIYNFY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
