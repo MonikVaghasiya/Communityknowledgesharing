@@ -22,5 +22,6 @@ data class PostUIState(
     var likeCount: MutableState<Int> = mutableStateOf(0),
     var isCommentSectionVisible: Boolean = false,
     var comments: SnapshotStateList<String> = mutableStateListOf(),
-    var newComment: MutableState<String> = mutableStateOf("")
+    var newComment: MutableState<String> = mutableStateOf(""),
+    var shouldFocusComment: MutableState<Boolean> = mutableStateOf(false)
 )
