@@ -12,9 +12,15 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+<<<<<<< HEAD
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectionsScreen(navController: NavController) {
+=======
+@OptIn(ExperimentalMaterial3Api :: class)
+@Composable
+fun ConnectionsScreen(navController : NavController){
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
     val context = LocalContext.current
     val currentUser = FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@") ?: ""
     var receivedRequests by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -24,7 +30,11 @@ fun ConnectionsScreen(navController: NavController) {
     fun loadRequests() {
         val db = FirebaseFirestore.getInstance()
 
+<<<<<<< HEAD
 
+=======
+        // Real-time listener for pending received requests
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
         db.collection("connectRequests")
             .whereEqualTo("to", currentUser)
             .whereEqualTo("status", "pending")
@@ -32,16 +42,28 @@ fun ConnectionsScreen(navController: NavController) {
                 receivedRequests = docs?.documents?.mapNotNull { it.getString("from") } ?: emptyList()
             }
 
+<<<<<<< HEAD
 
         db.collection("connectRequests")
             .whereEqualTo("from", currentUser)
             .whereEqualTo("status", "pending")
+=======
+        // Real-time listener for sent requests
+        // Real-time listener for sent pending requests
+        db.collection("connectRequests")
+            .whereEqualTo("from", currentUser)
+            .whereEqualTo("status", "pending") // ✅ Only pending ones
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
             .addSnapshotListener { docs, _ ->
                 sentRequests = docs?.documents?.mapNotNull { it.getString("to") } ?: emptyList()
             }
 
 
+<<<<<<< HEAD
 
+=======
+        // Real-time listener for accepted connections
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
         db.collection("connectRequests")
             .whereArrayContains("participants", currentUser)
             .whereEqualTo("status", "accepted")
@@ -54,7 +76,11 @@ fun ConnectionsScreen(navController: NavController) {
             }
     }
 
+<<<<<<< HEAD
 
+=======
+    // Initial load
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
     LaunchedEffect(Unit) { loadRequests() }
 
     Scaffold(
@@ -111,7 +137,10 @@ fun ConnectionsScreen(navController: NavController) {
         }
     }
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
 fun acceptRequest(from: String, to: String, context: Context, onComplete: () -> Unit) {
     val db = FirebaseFirestore.getInstance()
     db.collection("connectRequests")
@@ -136,7 +165,10 @@ fun acceptRequest(from: String, to: String, context: Context, onComplete: () -> 
             Toast.makeText(context, "Failed to find request", Toast.LENGTH_SHORT).show()
         }
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
 fun rejectRequest(from: String, to: String, context: Context, onComplete: () -> Unit) {
     val db = FirebaseFirestore.getInstance()
     db.collection("connectRequests")
@@ -157,4 +189,8 @@ fun rejectRequest(from: String, to: String, context: Context, onComplete: () -> 
         .addOnFailureListener {
             Toast.makeText(context, "Failed to find request", Toast.LENGTH_SHORT).show()
         }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84

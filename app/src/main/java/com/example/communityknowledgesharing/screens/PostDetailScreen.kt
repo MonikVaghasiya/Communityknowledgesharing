@@ -127,7 +127,12 @@ fun PostDetailScreen(navController: NavController, postId: String) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Button(
                                 onClick = {
+<<<<<<< HEAD
 
+=======
+                                    //val videoIntent = Intent(Intent.ACTION_VIEW, Uri.parse(currentPost.videoUrl))
+                                    //context.startActivity(videoIntent)
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
                                     currentPost.videoUrl?.let{url ->
                                         openYouTubeVideo(context, url)
                                     }
@@ -155,7 +160,11 @@ fun PostDetailScreen(navController: NavController, postId: String) {
         }
     }
 }
+<<<<<<< HEAD
 
+=======
+//helper function for the intent where it will check if device has the app or not//
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
 fun openYouTubeVideo(context: Context, url: String){
     val videoId = extractYouTubeVideoId(url)
 
@@ -170,7 +179,11 @@ fun openYouTubeVideo(context: Context, url: String){
         }
     }
     else{
+<<<<<<< HEAD
 
+=======
+        //fallback for if url is not valid//
+>>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 }
