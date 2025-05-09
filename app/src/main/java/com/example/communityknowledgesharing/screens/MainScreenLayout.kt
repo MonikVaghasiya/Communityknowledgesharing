@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -18,7 +17,7 @@ fun MainScreenLayout(
     topBarTitle: String,
     content: @Composable () -> Unit
 ) {
-    val tabs = listOf("home", "profile")
+    val tabs = listOf("home", "profile", "connections")
     val selectedTabIndex = tabs.indexOf(currentRoute)
 
     Scaffold(

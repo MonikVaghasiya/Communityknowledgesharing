@@ -1,6 +1,4 @@
-﻿// ProfileScreen.kt (fully updated)
-
-package com.example.communityknowledgesharing.screens
+﻿package com.example.communityknowledgesharing.screens
 
 import android.net.Uri
 import android.widget.Toast
@@ -31,6 +29,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 
+data class MaterialEntry(val title: String, val url: String)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(navController: NavController) {
@@ -50,12 +50,18 @@ fun ProfileScreen(navController: NavController) {
 
     val skills = remember { mutableStateListOf<String>() }
     val projects = remember { mutableStateListOf<String>() }
+    val materials = remember { mutableStateListOf<MaterialEntry>() }
+
     var newSkill by remember { mutableStateOf("") }
     var newProject by remember { mutableStateOf("") }
+    var newMaterialTitle by remember { mutableStateOf("") }
+    var newMaterialUrl by remember { mutableStateOf("") }
+
     var showSkillDialog by remember { mutableStateOf(false) }
     var showProjectDialog by remember { mutableStateOf(false) }
+    var showMaterialDialog by remember { mutableStateOf(false) }
 
-    // Load profile from Firestore
+
     LaunchedEffect(Unit) {
         FirebaseFirestore.getInstance().collection("users").document(uid).get()
             .addOnSuccessListener { doc ->
@@ -67,6 +73,9 @@ fun ProfileScreen(navController: NavController) {
                     skills.addAll(doc.get("skills") as? List<String> ?: emptyList())
                     projects.clear()
                     projects.addAll(doc.get("projects") as? List<String> ?: emptyList())
+                    val rawMaterials = doc.get("materials") as? List<Map<String, String>> ?: emptyList()
+                    materials.clear()
+                    materials.addAll(rawMaterials.mapNotNull { it["title"]?.let { t -> MaterialEntry(t, it["url"] ?: "") } })
                     doc.getString("profileImageUrl")?.let { url ->
                         if (url.isNotBlank()) profileImageUri = Uri.parse(url)
                     }
@@ -74,9 +83,7 @@ fun ProfileScreen(navController: NavController) {
             }
     }
 
-    Scaffold(topBar = {
-        TopAppBar(title = { Text("My Profile") })
-    }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text("My Profile") }) }) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -111,33 +118,19 @@ fun ProfileScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(12.dp))
 
             if (isEditing) {
-                OutlinedTextField(
-                    value = editedName,
-                    onValueChange = { editedName = it },
-                    label = { Text("Name") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = editedEmail,
-                    onValueChange = { editedEmail = it },
-                    label = { Text("Email") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = editedBio,
-                    onValueChange = { editedBio = it },
-                    label = { Text("Bio") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(value = editedName, onValueChange = { editedName = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = editedEmail, onValueChange = { editedEmail = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = editedBio, onValueChange = { editedBio = it }, label = { Text("Bio") }, modifier = Modifier.fillMaxWidth())
+
                 Button(onClick = {
                     if (profileImageUri != null) {
                         uploadProfileImage(profileImageUri!!, uid, onSuccess = { url ->
-                            saveUserProfileToFirestore(uid, editedName, editedEmail, editedBio, skills, projects, url, context)
+                            saveUserProfile(uid, editedName, editedEmail, editedBio, skills, projects, materials, url, context)
                         }, onFailure = {
                             Toast.makeText(context, "Image upload failed", Toast.LENGTH_SHORT).show()
                         })
                     } else {
-                        saveUserProfileToFirestore(uid, editedName, editedEmail, editedBio, skills, projects, null, context)
+                        saveUserProfile(uid, editedName, editedEmail, editedBio, skills, projects, materials, null, context)
                     }
                     isEditing = false
                 }, modifier = Modifier.align(Alignment.End)) {
@@ -154,110 +147,146 @@ fun ProfileScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Text("Skills")
-            skills.forEachIndexed { i, skill ->
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Text(skill)
-                    IconButton(onClick = {
-                        skills.removeAt(i)
-                        saveUserProfileToFirestore(uid, editedName, editedEmail, editedBio, skills, projects, profileImageUri?.toString(), context)
-                    }) { Icon(Icons.Default.Delete, contentDescription = null) }
-                }
-            }
-            Button(onClick = { showSkillDialog = true }) { Text("Add Skill") }
+            SectionList("Skills", skills, onAdd = { showSkillDialog = true }, onDelete = {
+                skills.remove(it)
+                saveUserProfile(uid, editedName, editedEmail, editedBio, skills, projects, materials, profileImageUri?.toString(), context)
+            })
 
-            Spacer(modifier = Modifier.height(20.dp))
+            SectionList("Projects", projects, onAdd = { showProjectDialog = true }, onDelete = {
+                projects.remove(it)
+                saveUserProfile(uid, editedName, editedEmail, editedBio, skills, projects, materials, profileImageUri?.toString(), context)
+            })
 
-            Text("Projects")
-            projects.forEachIndexed { i, proj ->
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Text(proj)
-                    IconButton(onClick = {
-                        projects.removeAt(i)
-                        saveUserProfileToFirestore(uid, editedName, editedEmail, editedBio, skills, projects, profileImageUri?.toString(), context)
-                    }) { Icon(Icons.Default.Delete, contentDescription = null) }
-                }
-            }
-            Button(onClick = { showProjectDialog = true }) { Text("Add Project") }
+            SectionList("My Materials", materials.map { "${it.title}: ${it.url}" }, onAdd = { showMaterialDialog = true }, onDelete = { item ->
+                materials.removeIf { "${it.title}: ${it.url}" == item }
+                saveUserProfile(uid, editedName, editedEmail, editedBio, skills, projects, materials, profileImageUri?.toString(), context)
+            })
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             Button(onClick = {
                 auth.signOut()
                 navController.navigate("login") {
                     popUpTo(0) { inclusive = true }
                 }
-            }) { Text("Logout") }
+            }) {
+                Text("Logout")
+            }
         }
     }
 
     if (showSkillDialog) {
-        AlertDialog(
-            onDismissRequest = { showSkillDialog = false },
-            title = { Text("Add Skill") },
-            text = {
-                OutlinedTextField(value = newSkill, onValueChange = { newSkill = it }, label = { Text("Skill") })
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (newSkill.isNotBlank()) {
-                        skills.add(newSkill.trim())
-                        saveUserProfileToFirestore(uid, editedName, editedEmail, editedBio, skills, projects, profileImageUri?.toString(), context)
-                        newSkill = ""
-                        showSkillDialog = false
-                    }
-                }) { Text("Add") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSkillDialog = false }) { Text("Cancel") }
+        InputDialog("Add Skill", newSkill, onValueChange = { newSkill = it }, onAdd = {
+            if (newSkill.isNotBlank()) {
+                skills.add(newSkill)
+                newSkill = ""
+                saveUserProfile(uid, editedName, editedEmail, editedBio, skills, projects, materials, profileImageUri?.toString(), context)
             }
-        )
+            showSkillDialog = false
+        }, onDismiss = { showSkillDialog = false })
     }
 
     if (showProjectDialog) {
-        AlertDialog(
-            onDismissRequest = { showProjectDialog = false },
-            title = { Text("Add Project") },
-            text = {
-                OutlinedTextField(value = newProject, onValueChange = { newProject = it }, label = { Text("Project") })
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (newProject.isNotBlank()) {
-                        projects.add(newProject.trim())
-                        saveUserProfileToFirestore(uid, editedName, editedEmail, editedBio, skills, projects, profileImageUri?.toString(), context)
-                        newProject = ""
-                        showProjectDialog = false
-                    }
-                }) { Text("Add") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showProjectDialog = false }) { Text("Cancel") }
+        InputDialog("Add Project", newProject, onValueChange = { newProject = it }, onAdd = {
+            if (newProject.isNotBlank()) {
+                projects.add(newProject)
+                newProject = ""
+                saveUserProfile(uid, editedName, editedEmail, editedBio, skills, projects, materials, profileImageUri?.toString(), context)
             }
+            showProjectDialog = false
+        }, onDismiss = { showProjectDialog = false })
+    }
+
+    if (showMaterialDialog) {
+        MaterialInputDialog(
+            title = newMaterialTitle,
+            url = newMaterialUrl,
+            onTitleChange = { newMaterialTitle = it },
+            onUrlChange = { newMaterialUrl = it },
+            onAdd = {
+                if (newMaterialTitle.isNotBlank() && newMaterialUrl.isNotBlank()) {
+                    materials.add(MaterialEntry(newMaterialTitle, newMaterialUrl))
+                    newMaterialTitle = ""
+                    newMaterialUrl = ""
+                    saveUserProfile(uid, editedName, editedEmail, editedBio, skills, projects, materials, profileImageUri?.toString(), context)
+                }
+                showMaterialDialog = false
+            },
+            onDismiss = { showMaterialDialog = false }
         )
     }
 }
 
-private fun uploadProfileImage(
-    imageUri: Uri,
-    uid: String,
-    onSuccess: (String) -> Unit,
-    onFailure: () -> Unit
+@Composable
+fun SectionList(
+    title: String,
+    items: List<String>,
+    onAdd: () -> Unit,
+    onDelete: (String) -> Unit
 ) {
+    Text(title, style = MaterialTheme.typography.titleMedium)
+    items.forEach { item ->
+        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Text(item)
+            IconButton(onClick = { onDelete(item) }) {
+                Icon(Icons.Default.Delete, contentDescription = null)
+            }
+        }
+    }
+    Button(onClick = onAdd) { Text("Add ${title.removePrefix("My ").dropLast(1)}") }
+    Spacer(modifier = Modifier.height(12.dp))
+}
+
+@Composable
+fun InputDialog(title: String, value: String, onValueChange: (String) -> Unit, onAdd: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(value = value, onValueChange = onValueChange, label = { Text(title) })
+        },
+        confirmButton = { TextButton(onClick = onAdd) { Text("Add") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+fun MaterialInputDialog(
+    title: String,
+    url: String,
+    onTitleChange: (String) -> Unit,
+    onUrlChange: (String) -> Unit,
+    onAdd: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Material") },
+        text = {
+            Column {
+                OutlinedTextField(value = title, onValueChange = onTitleChange, label = { Text("Title") })
+                OutlinedTextField(value = url, onValueChange = onUrlChange, label = { Text("Link URL") })
+            }
+        },
+        confirmButton = { TextButton(onClick = onAdd) { Text("Add") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+private fun uploadProfileImage(imageUri: Uri, uid: String, onSuccess: (String) -> Unit, onFailure: () -> Unit) {
     val imageRef = FirebaseStorage.getInstance().reference.child("profile_images/$uid.jpg")
     imageRef.putFile(imageUri)
-        .addOnSuccessListener {
-            imageRef.downloadUrl.addOnSuccessListener { uri -> onSuccess(uri.toString()) }
-        }
+        .addOnSuccessListener { imageRef.downloadUrl.addOnSuccessListener { uri -> onSuccess(uri.toString()) } }
         .addOnFailureListener { onFailure() }
 }
 
-private fun saveUserProfileToFirestore(
+private fun saveUserProfile(
     uid: String,
     name: String,
     email: String,
     bio: String,
     skills: List<String>,
     projects: List<String>,
+    materials: List<MaterialEntry>,
     profileImageUrl: String?,
     context: android.content.Context
 ) {
@@ -267,6 +296,7 @@ private fun saveUserProfileToFirestore(
         "bio" to bio,
         "skills" to skills,
         "projects" to projects,
+        "materials" to materials.map { mapOf("title" to it.title, "url" to it.url) },
         "profileImageUrl" to (profileImageUrl ?: "")
     )
     FirebaseFirestore.getInstance()

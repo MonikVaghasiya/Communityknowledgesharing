@@ -28,12 +28,11 @@ fun LoginScreen(navController: NavController) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(text = "Login", style = MaterialTheme.typography.headlineMedium)
-
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = { email = it.trim() },
             label = { Text("Email") },
             modifier = Modifier.fillMaxWidth()
         )
@@ -52,25 +51,35 @@ fun LoginScreen(navController: NavController) {
 
         Button(
             onClick = {
+                if (email.isBlank() || password.isBlank()) {
+                    Toast.makeText(context, "Please enter both email and password.", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+
                 auth.signInWithEmailAndPassword(email, password)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
                             val user = auth.currentUser
-                            if (user != null && user.isEmailVerified) {
-                                Toast.makeText(context, "Login successful!", Toast.LENGTH_SHORT).show()
-                                navController.navigate("home")
-                            } else {
-                                Toast.makeText(
-                                    context,
-                                    "Please verify your email before logging in.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                auth.signOut()
+                            if (user != null) {
+                                user.reload().addOnSuccessListener {
+                                    if (user.isEmailVerified) {
+                                        Toast.makeText(context, "Login successful!", Toast.LENGTH_SHORT).show()
+                                        navController.navigate("home") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "Please verify your email before logging in.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
                             }
                         } else {
                             Toast.makeText(
                                 context,
-                                "Login failed: please sign up if you don't have an account",
+                                "Login failed: ${task.exception?.message}",
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -78,15 +87,13 @@ fun LoginScreen(navController: NavController) {
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(text = "Login")
+            Text("Login")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        TextButton(
-            onClick = { navController.navigate("signup") }
-        ) {
-            Text(text = "Don't have an account? Sign Up")
+        TextButton(onClick = { navController.navigate("signup") }) {
+            Text("Don't have an account? Sign Up")
         }
     }
 }

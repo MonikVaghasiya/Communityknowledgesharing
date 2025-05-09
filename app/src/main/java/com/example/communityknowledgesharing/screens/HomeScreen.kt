@@ -1,5 +1,6 @@
 package com.example.communityknowledgesharing.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,6 +26,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.TextFieldValue
@@ -35,117 +38,124 @@ import com.example.communityknowledgesharing.models.PostUIState
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import com.example.communityknowledgesharing.utils.sendConnectionRequest
+
+@Composable
+fun isLandscape(): Boolean {
+    val config = LocalConfiguration.current
+    return config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
-    val auth = FirebaseAuth.getInstance()
-    val fullEmail = auth.currentUser?.email ?: "User"
-    val username = fullEmail.substringBefore("@")
-    val context = LocalContext.current
-
-    val focusManager = LocalFocusManager.current
-    var searchQuery by remember { mutableStateOf(TextFieldValue("")) }
-    val lazyListState = rememberLazyListState()
-
+    val db = FirebaseFirestore.getInstance()
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
     val postStates = remember { mutableStateListOf<PostUIState>() }
-
-    val db = FirebaseFirestore.getInstance()
+    var searchQuery by remember { mutableStateOf(TextFieldValue("")) }
+    val listState = rememberLazyListState()
+    val landscape = isLandscape()
 
     LaunchedEffect(Unit) {
         db.collection("posts")
             .orderBy("timestamp")
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Toast.makeText(context, "Failed to load posts", Toast.LENGTH_SHORT).show()
-                    return@addSnapshotListener
-                }
-                val fetchedPosts = snapshot?.documents?.mapNotNull { document ->
-                    val title = document.getString("title") ?: ""
-                    val description = document.getString("description") ?: ""
-                    val user = document.getString("username") ?: ""
-                    val imageUrl = document.getString("imageUrl") ?: ""
-                    val comments = document.get("comments") as? List<String> ?: emptyList()
-                    Post(
-                        username = user,
-                        title = title,
-                        description = description,
-                        imageUri = if (imageUrl.isNotEmpty()) Uri.parse(imageUrl) else null,
-                        postId = document.id,
-                        existingComments = comments
+                if (error != null) return@addSnapshotListener
+                val fetchedPosts = snapshot?.documents?.mapNotNull { doc ->
+                    val title = doc.getString("title") ?: ""
+                    val desc = doc.getString("description") ?: ""
+                    val user = doc.getString("username") ?: ""
+                    val imgUrl = doc.getString("imageUrl") ?: ""
+                    val postId = doc.id
+                    val video = doc.getString("videoUrl") ?: ""
+                    val comments = doc.get("existingComments") as? List<String> ?: emptyList()
+                    val likeCount = doc.getLong("likeCount")?.toInt() ?: 0
+
+                    Post(user, title, desc,
+                        imageUri = if (imgUrl.isNotEmpty()) Uri.parse(imgUrl) else null,
+                        postId = postId,
+                        existingComments = comments,
+                        likeCount = likeCount,
+                        videoUrl = video
                     )
                 } ?: emptyList()
 
                 posts = fetchedPosts.reversed()
-
-                if (posts.size != postStates.size) {
-                    postStates.clear()
-                    fetchedPosts.forEach {
-                        postStates.add(PostUIState(comments = mutableStateListOf(*it.existingComments.toTypedArray())))
-                    }
-                }
+                postStates.clear()
+                postStates.addAll(posts.map {
+                    PostUIState(
+                        likeCount = mutableStateOf(it.likeCount),
+                        comments = mutableStateListOf(*it.existingComments.toTypedArray()),
+                        newComment = mutableStateOf(""),
+                        isCommentSectionVisible = false,
+                        shouldFocusComment = mutableStateOf(false)
+                    )
+                })
             }
     }
 
     Scaffold(
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("Community Feed") },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary)
-                )
-                TabRow(selectedTabIndex = 0) {
-                    Tab(
-                        selected = true,
-                        onClick = { },
-                        text = { Text("Home") }
-                    )
-                    Tab(
-                        selected = false,
-                        onClick = {
-                            navController.navigate("profile") {
-                                popUpTo("home") { inclusive = false }
-                                launchSingleTop = true
-                            }
-                        },
-                        text = { Text("Profile") }
-                    )
-                }
-            }
-        },
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate("upload") }) {
                 Icon(Icons.Default.Add, contentDescription = "Add Post")
             }
         }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(16.dp)
-                .fillMaxSize()
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text("Search posts, skills, users...") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            LazyColumn(
-                state = lazyListState,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
+    ) { inner ->
+        if (landscape) {
+            Row(
+                modifier = Modifier
+                    .padding(inner)
+                    .padding(16.dp)
+                    .fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                itemsIndexed(posts.zip(postStates)) { index, (post, state) ->
-                    if (post.title.contains(searchQuery.text, ignoreCase = true) ||
-                        post.description.contains(searchQuery.text, ignoreCase = true) ||
-                        post.username.contains(searchQuery.text, ignoreCase = true)
-                    ) {
-                        PostItem(post, state, lazyListState, index, navController)
+                Column(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text("Search posts, skills, users...") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                LazyColumn(
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.weight(2f)
+                ) {
+                    itemsIndexed(posts.zip(postStates)) { index, (post, state) ->
+                        if (searchQuery.text.isBlank() ||
+                            post.title.contains(searchQuery.text, true) ||
+                            post.description.contains(searchQuery.text, true) ||
+                            post.username.contains(searchQuery.text, true)) {
+                            PostItem(post, state, listState, index, navController)
+                        }
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .padding(inner)
+                    .padding(16.dp)
+                    .fillMaxSize()
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search posts, skills, users...") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    itemsIndexed(posts.zip(postStates)) { index, (post, state) ->
+                        if (searchQuery.text.isBlank() ||
+                            post.title.contains(searchQuery.text, true) ||
+                            post.description.contains(searchQuery.text, true) ||
+                            post.username.contains(searchQuery.text, true)) {
+                            PostItem(post, state, listState, index, navController)
+                        }
                     }
                 }
             }
@@ -153,54 +163,59 @@ fun HomeScreen(navController: NavController) {
     }
 }
 
-@Composable
-fun PostItem(
-    post: Post,
-    state: PostUIState,
-    listState: LazyListState,
-    index: Int,
-    navController: NavController
-) {
-    val focusManager = LocalFocusManager.current
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .clickable {
-                navController.navigate("postDetail/${post.postId}")
-            },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F8F8))
-    ) {
+
+
+@Composable
+fun PostItem(post: Post, state: PostUIState, listState: LazyListState, index: Int, navController: NavController) {
+    val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val coroutineScope = rememberCoroutineScope()
+
+    Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 post.username,
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.clickable {
-                    if (post.username.isNotEmpty()) {
-                        navController.navigate("publicProfile/${post.username}")
-                    }
+                    navController.navigate("publicProfile/${post.username}")
                 }
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(post.title, style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(post.description, style = MaterialTheme.typography.bodyMedium)
 
-            post.imageUri?.let { uri ->
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                post.title,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.clickable {
+                    if (!state.isCommentSectionVisible)
+                        navController.navigate("postDetail/${post.postId}")
+                }
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(post.description)
+
+            post.imageUri?.let {
                 Spacer(modifier = Modifier.height(8.dp))
                 Image(
-                    painter = rememberAsyncImagePainter(uri),
-                    contentDescription = "Post Image",
+                    painter = rememberAsyncImagePainter(it),
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
+                    modifier = Modifier.fillMaxWidth().height(200.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            post.videoUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                }) {
+                    Text("▶ Watch Video", color = Color.White)
+                }
+            }
 
+            Spacer(modifier = Modifier.height(12.dp))
             PostActionsRow(post, state, listState, index, focusManager)
 
             AnimatedVisibility(state.isCommentSectionVisible) {
@@ -211,58 +226,73 @@ fun PostItem(
 }
 
 @Composable
-fun PostActionsRow(
-    post: Post,
-    state: PostUIState,
-    listState: LazyListState,
-    index: Int,
-    focusManager: FocusManager
-) {
+fun PostActionsRow(post: Post, state: PostUIState, listState: LazyListState, index: Int, focusManager: FocusManager) {
+    val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        ActionIconButton(if (state.isLiked) "❤️ ${state.likeCount.value}" else "🤍 ${state.likeCount.value}") {
-            state.isLiked = !state.isLiked
-            if (state.isLiked) state.likeCount.value++ else state.likeCount.value = (state.likeCount.value - 1).coerceAtLeast(0)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconToggleButton(
+                checked = state.isLiked,
+                onCheckedChange = {
+                    state.isLiked = it
+                    val change = if (it) 1 else -1
+                    state.likeCount.value += change
+                    db.collection("posts").document(post.postId)
+                        .update("likeCount", FieldValue.increment(change.toLong()))
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = "Like",
+                    tint = if (state.isLiked) Color.Red else Color.Gray
+                )
+            }
+            Text("${state.likeCount.value} likes")
         }
-        ActionIconButton(if (state.isCommentSectionVisible) "💬 Hide" else "💬 Comment") {
-            focusManager.clearFocus()
+
+        TextButton(onClick = {
             state.isCommentSectionVisible = !state.isCommentSectionVisible
+            if (state.isCommentSectionVisible) {
+                coroutineScope.launch {
+                    listState.animateScrollToItem(index)
+                    state.shouldFocusComment.value = true
+                }
+            } else {
+                state.shouldFocusComment.value = false
+            }
+        }) {
+            Text(if (state.isCommentSectionVisible) "💬 Hide" else "💬 Comment")
         }
-        ActionIconButton("🔗 Share") {
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+
+        TextButton(onClick = {
+            val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, "${post.title}\n${post.description}")
             }
-            context.startActivity(Intent.createChooser(shareIntent, "Share Post"))
+            context.startActivity(Intent.createChooser(intent, "Share Post"))
+        }) {
+            Text("🔗 Share")
         }
-        ActionIconButton("🤝 Connect") {
-            Toast.makeText(context, "Connect request sent to ${post.username}", Toast.LENGTH_SHORT).show()
-        }
-    }
 
-    if (state.isCommentSectionVisible) {
-        LaunchedEffect(index) {
-            listState.animateScrollToItem(index)
-        }
-    }
-}
+        TextButton(onClick = {
+            val currentUser =
+                FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@") ?: "unknown"
+            sendConnectionRequest(currentUser, post.username, context)
 
-@Composable
-fun ActionIconButton(text: String, onClick: () -> Unit) {
-    TextButton(onClick = onClick) {
-        Text(text)
+        }) {
+            Text("🤝 Connect")
+        }
     }
 }
 
 @Composable
 fun CommentSection(post: Post, state: PostUIState) {
     val db = FirebaseFirestore.getInstance()
-    val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+    val focusRequester = remember { FocusRequester() }
 
     Column(
         modifier = Modifier
@@ -270,12 +300,21 @@ fun CommentSection(post: Post, state: PostUIState) {
             .background(Color(0xFFEFEFEF))
             .padding(8.dp)
     ) {
+
         if (state.comments.isNotEmpty()) {
             state.comments.forEach { comment ->
-                Text(text = "• $comment", style = MaterialTheme.typography.bodySmall)
+                Text("• $comment", style = MaterialTheme.typography.bodySmall)
             }
-            Divider(color = Color.Gray, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+            Divider(
+                color = Color.Gray,
+                thickness = 1.dp,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        } else {
+            Text("No comments yet", style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(8.dp))
         }
+
 
         OutlinedTextField(
             value = state.newComment.value,
@@ -293,12 +332,19 @@ fun CommentSection(post: Post, state: PostUIState) {
 
         Button(
             onClick = {
-                val trimmed = state.newComment.value.trim()
-                if (trimmed.isNotEmpty()) {
-                    state.comments.add(trimmed)
+                val comment = state.newComment.value.trim()
+                if (comment.isNotBlank()) {
                     db.collection("posts").document(post.postId)
-                        .update("comments", FieldValue.arrayUnion(trimmed))
-                    state.newComment.value = ""
+                        .update("existingComments", FieldValue.arrayUnion(comment))
+                        .addOnSuccessListener {
+                            // Update local UI
+                            state.comments.add(comment)
+                            state.newComment.value = ""
+                            focusManager.clearFocus()
+                        }
+                        .addOnFailureListener {
+                            Toast.makeText(context, "Failed to post comment", Toast.LENGTH_SHORT).show()
+                        }
                 }
             },
             modifier = Modifier.align(Alignment.End),
@@ -308,9 +354,41 @@ fun CommentSection(post: Post, state: PostUIState) {
         }
     }
 
-    LaunchedEffect(state.isCommentSectionVisible) {
-        if (state.isCommentSectionVisible) {
-            focusRequester.requestFocus()
+
+    LaunchedEffect(state.shouldFocusComment.value) {
+        if (state.shouldFocusComment.value) {
+            delay(200)
+            runCatching { focusRequester.requestFocus() }
+            state.shouldFocusComment.value = false
         }
     }
+}
+fun sendConnectionRequest(from: String, to: String, context: Context) {
+    val db = FirebaseFirestore.getInstance()
+    val connectRef = db.collection("connectRequests")
+
+    connectRef
+        .whereEqualTo("from", from)
+        .whereEqualTo("to", to)
+        .get()
+        .addOnSuccessListener { existing ->
+            if (existing.isEmpty) {
+                val request = mapOf(
+                    "from" to from,
+                    "to" to to,
+                    "participants" to listOf(from, to),
+                    "status" to "pending",
+                    "timestamp" to FieldValue.serverTimestamp()
+                )
+                connectRef.add(request)
+                    .addOnSuccessListener {
+                        Toast.makeText(context, "Request sent to @$to", Toast.LENGTH_SHORT).show()
+                    }
+                    .addOnFailureListener {
+                        Toast.makeText(context, "Failed to send request", Toast.LENGTH_SHORT).show()
+                    }
+            } else {
+                Toast.makeText(context, "Request already exists", Toast.LENGTH_SHORT).show()
+            }
+        }
 }

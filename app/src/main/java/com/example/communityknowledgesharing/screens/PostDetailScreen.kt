@@ -27,6 +27,9 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.communityknowledgesharing.models.Post
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import android.content.Context
+import android.content.ActivityNotFoundException
+import java.util.regex.Pattern
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +51,8 @@ fun PostDetailScreen(navController: NavController, postId: String) {
                     description = data["description"] as? String ?: "",
                     username = data["username"] as? String ?: "",
                     imageUri = (data["imageUrl"] as? String)?.let { Uri.parse(it) },
-                    existingComments = data["comments"] as? List<String> ?: emptyList()
+                    existingComments = data["comments"] as? List<String> ?: emptyList(),
+                    videoUrl = data["videoUrl"] as? String
                 )
             }
             loading = false
@@ -119,6 +123,18 @@ fun PostDetailScreen(navController: NavController, postId: String) {
                             Text("Share")
                         }
 
+                        if(!currentPost.videoUrl.isNullOrBlank()){
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+
+                                    currentPost.videoUrl?.let{url ->
+                                        openYouTubeVideo(context, url)
+                                    }
+                                }
+                            ){Text("Watch related video")}
+                        }
+
                         if (isOwner) {
                             Button(
                                 onClick = {
@@ -138,4 +154,33 @@ fun PostDetailScreen(navController: NavController, postId: String) {
             }
         }
     }
+}
+
+fun openYouTubeVideo(context: Context, url: String){
+    val videoId = extractYouTubeVideoId(url)
+
+    if(videoId != null){
+        val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId"))
+        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+
+        try{
+            context.startActivity(appIntent)
+        }catch (e: ActivityNotFoundException){
+            context.startActivity(webIntent)
+        }
+    }
+    else{
+
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+}
+
+fun extractYouTubeVideoId(url: String) : String?{
+    val pattern = Pattern.compile(
+        "(?:youtube\\.com.*(?:\\?|&)v=|youtu\\.be/)([a-zA-Z0-9_-]{11})",
+        Pattern.CASE_INSENSITIVE
+    )
+
+    val matcher = pattern.matcher(url)
+    return if(matcher.find()) matcher.group(1) else null
 }

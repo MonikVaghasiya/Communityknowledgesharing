@@ -11,6 +11,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,18 +69,44 @@ fun SignupScreen(navController: NavController) {
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
                                 val user = auth.currentUser
-                                user?.sendEmailVerification()?.addOnCompleteListener { verifyTask ->
-                                    if (verifyTask.isSuccessful) {
-                                        Toast.makeText(
-                                            context,
-                                            "Verification email sent. Please verify before login.",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                        navController.popBackStack() // back to login
-                                    } else {
-                                        Toast.makeText(context, "Verification email failed.", Toast.LENGTH_LONG).show()
+                                val uid = email.substringBefore("@")
+
+
+                                val newUserData = mapOf(
+                                    "name" to uid,
+                                    "email" to email,
+                                    "bio" to "",
+                                    "skills" to listOf<String>(),
+                                    "projects" to listOf<String>(),
+                                    "materials" to listOf<Map<String, String>>(),
+                                    "profileImageUrl" to ""
+                                )
+
+                                FirebaseFirestore.getInstance()
+                                    .collection("users")
+                                    .document(uid)
+                                    .set(newUserData)
+                                    .addOnSuccessListener {
+                                        user?.sendEmailVerification()?.addOnCompleteListener { verifyTask ->
+                                            if (verifyTask.isSuccessful) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Verification email sent. Please verify before login.",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                                navController.popBackStack()
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Verification email failed.",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
                                     }
-                                }
+                                    .addOnFailureListener {
+                                        Toast.makeText(context, "Firestore error: ${it.message}", Toast.LENGTH_LONG).show()
+                                    }
                             } else {
                                 Toast.makeText(context, "Signup failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                             }

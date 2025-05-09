@@ -1,7 +1,11 @@
 package com.example.communityknowledgesharing.screens
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,24 +17,58 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.communityknowledgesharing.models.Post
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PublicProfileScreen(username: String, navController: NavController) {
     val context = LocalContext.current
-    var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
+    val currentUser = FirebaseAuth.getInstance().currentUser?.email?.substringBefore("@") ?: "unknown"
+    val db = FirebaseFirestore.getInstance()
+
+    var isConnected by remember { mutableStateOf(false) }
+    var materials by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var skills by remember { mutableStateOf<List<String>>(emptyList()) }
     var bio by remember { mutableStateOf("") }
+    var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
 
     LaunchedEffect(username) {
-        val db = FirebaseFirestore.getInstance()
 
-        // Fetch posts by this user
+        db.collection("connectRequests")
+            .whereEqualTo("status", "accepted")
+            .whereArrayContains("participants", currentUser)
+            .get()
+            .addOnSuccessListener { docs ->
+                isConnected = docs.any {
+                    it.getString("from") == username || it.getString("to") == username
+                }
+            }
+
+
+        db.collection("users").document(username).get()
+            .addOnSuccessListener { doc ->
+                bio = doc.getString("bio") ?: "No bio provided."
+                skills = doc.get("skills") as? List<String> ?: emptyList()
+
+
+                if (isConnected) {
+                    val rawMaterials = doc.get("materials") as? List<Map<String, String>> ?: emptyList()
+                    materials = rawMaterials.mapNotNull {
+                        val title = it["title"]
+                        val url = it["url"]
+                        if (!title.isNullOrBlank() && !url.isNullOrBlank()) title to url else null
+                    }
+                }
+            }
+
+
         db.collection("posts")
             .whereEqualTo("username", username)
             .get()
@@ -40,28 +78,15 @@ fun PublicProfileScreen(username: String, navController: NavController) {
                     val description = doc.getString("description") ?: ""
                     val imageUrl = doc.getString("imageUrl") ?: ""
                     val comments = doc.get("comments") as? List<String> ?: emptyList()
-
                     Post(
                         username = username,
                         title = title,
                         description = description,
-                        imageUri = if (imageUrl.isNotEmpty()) android.net.Uri.parse(imageUrl) else null,
+                        imageUri = if (imageUrl.isNotEmpty()) Uri.parse(imageUrl) else null,
                         postId = doc.id,
                         existingComments = comments
                     )
                 }
-            }
-            .addOnFailureListener {
-                Toast.makeText(context, "Failed to load posts", Toast.LENGTH_SHORT).show()
-            }
-
-        // Fetch profile info (bio and skills)
-        db.collection("users")
-            .document(username)
-            .get()
-            .addOnSuccessListener { doc ->
-                bio = doc.getString("bio") ?: "No bio provided."
-                skills = doc.get("skills") as? List<String> ?: emptyList()
             }
     }
 
@@ -86,12 +111,33 @@ fun PublicProfileScreen(username: String, navController: NavController) {
         ) {
             item {
                 Text("Bio:", style = MaterialTheme.typography.titleMedium)
-                Text(bio, style = MaterialTheme.typography.bodyMedium)
+                Text(bio)
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text("Skills:", style = MaterialTheme.typography.titleMedium)
-                skills.forEach { skill ->
-                    Text("• $skill")
+                skills.forEach { Text("• $it") }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("Materials:", style = MaterialTheme.typography.titleMedium)
+                if (isConnected) {
+                    if (materials.isEmpty()) {
+                        Text("No materials shared.")
+                    } else {
+                        materials.forEach { (title, link) ->
+                            Text(
+                                text = "• $title",
+                                color = MaterialTheme.colorScheme.primary,
+                                textDecoration = TextDecoration.Underline,
+                                modifier = Modifier.clickable {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link))
+                                    context.startActivity(intent)
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    Text("Connect with @$username to view materials.")
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -123,14 +169,16 @@ fun PublicProfileScreen(username: String, navController: NavController) {
 
             item {
                 Spacer(modifier = Modifier.height(32.dp))
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Button(
-                        onClick = {
-                            Toast.makeText(context, "Connect request sent to @$username", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.align(Alignment.Center)
-                    ) {
-                        Text("Connect")
+                if (currentUser != username) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                sendConnectionRequest(currentUser, username, context)
+                            },
+                            modifier = Modifier.align(Alignment.Center)
+                        ) {
+                            Text("Connect")
+                        }
                     }
                 }
 
@@ -138,3 +186,5 @@ fun PublicProfileScreen(username: String, navController: NavController) {
         }
     }
 }
+
+

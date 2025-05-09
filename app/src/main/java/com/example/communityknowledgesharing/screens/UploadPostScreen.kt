@@ -28,7 +28,7 @@ import java.util.UUID
 fun UploadPostScreen(
     navController: NavController,
 
-) {
+    ) {
     val auth = FirebaseAuth.getInstance()
     val fullEmail = auth.currentUser?.email ?: "User"
     val username = fullEmail.substringBefore("@")
@@ -38,6 +38,7 @@ fun UploadPostScreen(
     var newPostTitle by remember { mutableStateOf("") }
     var newPostDescription by remember { mutableStateOf("") }
     var newPostImageUri by remember { mutableStateOf<Uri?>(null) }
+    var videoLink by remember { mutableStateOf("")}
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -77,6 +78,13 @@ fun UploadPostScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            OutlinedTextField(
+                value = videoLink,
+                onValueChange = {videoLink = it},
+                label = {Text("Optional Video Link (e.g Youtube")},
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Button(
                 onClick = { imagePickerLauncher.launch("image/*") },
                 modifier = Modifier.fillMaxWidth()
@@ -107,6 +115,7 @@ fun UploadPostScreen(
                                 description = newPostDescription,
                                 username = username,
                                 imageUri = newPostImageUri!!,
+                                videoUrl = if(videoLink.isNotBlank()) videoLink else null,
                                 navController = navController,
                                 context = context
                             )
@@ -116,6 +125,7 @@ fun UploadPostScreen(
                                 description = newPostDescription,
                                 username = username,
                                 imageUrl = null,
+                                videoUrl = if(videoLink.isNotBlank()) videoLink else null,
                                 navController = navController,
                                 context = context
                             )
@@ -132,12 +142,13 @@ fun UploadPostScreen(
     }
 }
 
-// Upload Image to Storage, then Upload Post
+
 private fun uploadImageAndPost(
     title: String,
     description: String,
     username: String,
     imageUri: Uri,
+    videoUrl : String?,
     navController: NavController,
     context: android.content.Context
 ) {
@@ -147,7 +158,7 @@ private fun uploadImageAndPost(
     imageRef.putFile(imageUri)
         .addOnSuccessListener {
             imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
-                uploadPostToFirestore(title, description, username, downloadUri.toString(), navController, context)
+                uploadPostToFirestore(title, description, username, downloadUri.toString(), videoUrl, navController, context)
             }
         }
         .addOnFailureListener {
@@ -155,12 +166,13 @@ private fun uploadImageAndPost(
         }
 }
 
-// Upload Post to Firestore
+
 private fun uploadPostToFirestore(
     title: String,
     description: String,
     username: String,
     imageUrl: String?,
+    videoUrl: String?, //param for intent
     navController: NavController,
     context: android.content.Context
 ) {
@@ -170,8 +182,12 @@ private fun uploadPostToFirestore(
         "title" to title,
         "description" to description,
         "imageUrl" to (imageUrl ?: ""),
+        "videoUrl" to (videoUrl ?: ""),
+        "likeCount" to 0,
+        "existingComments" to emptyList<String>(),
         "timestamp" to System.currentTimeMillis()
     )
+
 
     db.collection("posts")
         .add(post)
