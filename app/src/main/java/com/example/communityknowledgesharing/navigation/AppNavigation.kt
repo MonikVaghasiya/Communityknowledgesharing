@@ -19,9 +19,26 @@ fun AppNavigation() {
     ) {
         composable("login") { LoginScreen(navController) }
         composable("signup") { SignupScreen(navController) }
-        composable("home") { HomeScreen(navController) }
+
+        composable("home") {
+            MainScreenLayout(navController, currentRoute = "home", topBarTitle = "Community Feed") {
+                HomeScreen(navController)
+            }
+        }
+
+        composable("profile") {
+            MainScreenLayout(navController, currentRoute = "profile", topBarTitle = "My Profile") {
+                ProfileScreen(navController)
+            }
+        }
+
+        composable("connections") {
+            MainScreenLayout(navController, currentRoute = "connections", topBarTitle = "Connections") {
+                ConnectionsScreen(navController)
+            }
+        }
+
         composable("upload") { UploadPostScreen(navController) }
-        composable("profile") { ProfileScreen(navController) }
 
         composable(
             route = "postDetail/{postId}",
