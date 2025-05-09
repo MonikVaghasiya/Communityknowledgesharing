@@ -13,7 +13,8 @@ data class Post(
     val description: String,
     val imageUri: Uri? = null,
     val postId: String = "",                    // ✅ Firestore Document ID
-    val existingComments: List<String> = emptyList()  // ✅ Existing Comments
+    val existingComments: List<String> = emptyList(),  // ✅ Existing Comments
+    val videoUrl: String? = null //for the Youtube intent
 )
 
 // 🐾 UI State class for Post
