@@ -35,6 +35,9 @@ import com.example.communityknowledgesharing.models.PostUIState
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import android.util.Log
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +69,7 @@ fun HomeScreen(navController: NavController) {
                     val description = document.getString("description") ?: ""
                     val user = document.getString("username") ?: ""
                     val imageUrl = document.getString("imageUrl") ?: ""
-                    val comments = document.get("comments") as? List<String> ?: emptyList()
+                    val comments = document.get("existingComments") as? List<String> ?: emptyList()
                     Post(
                         username = user,
                         title = title,
@@ -167,7 +170,7 @@ fun PostItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
-            .clickable {
+            .clickable(enabled = !state.isCommentSectionVisible) {
                 navController.navigate("postDetail/${post.postId}")
             },
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F8F8))
@@ -220,6 +223,10 @@ fun PostActionsRow(
 ) {
     val context = LocalContext.current
 
+    val shouldRequestFocus = remember {mutableStateOf(false)}
+
+    val coroutineScope = rememberCoroutineScope()
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly
@@ -231,6 +238,17 @@ fun PostActionsRow(
         ActionIconButton(if (state.isCommentSectionVisible) "💬 Hide" else "💬 Comment") {
             focusManager.clearFocus()
             state.isCommentSectionVisible = !state.isCommentSectionVisible
+
+            if(state.isCommentSectionVisible){
+                coroutineScope.launch{
+                    listState.animateScrollToItem(index)
+                    state.shouldFocusComment.value = true
+                }
+
+            }
+            else{
+                state.shouldFocusComment.value = false
+            }
         }
         ActionIconButton("🔗 Share") {
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -264,6 +282,8 @@ fun CommentSection(post: Post, state: PostUIState) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
+    val isFirstAppearance = remember{mutableStateOf(true)}
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -277,17 +297,20 @@ fun CommentSection(post: Post, state: PostUIState) {
             Divider(color = Color.Gray, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
         }
 
-        OutlinedTextField(
-            value = state.newComment.value,
-            onValueChange = { state.newComment.value = it },
-            label = { Text("Write a comment...") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester),
-            keyboardActions = KeyboardActions(onDone = {
-                focusManager.clearFocus()
-            })
-        )
+        key(state.isCommentSectionVisible) {
+
+            OutlinedTextField(
+                value = state.newComment.value,
+                onValueChange = { state.newComment.value = it },
+                label = { Text("Write a comment...") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
+                keyboardActions = KeyboardActions(onDone = {
+                    focusManager.clearFocus()
+                })
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -295,10 +318,24 @@ fun CommentSection(post: Post, state: PostUIState) {
             onClick = {
                 val trimmed = state.newComment.value.trim()
                 if (trimmed.isNotEmpty()) {
-                    state.comments.add(trimmed)
+                    /*state.comments.add(trimmed)
                     db.collection("posts").document(post.postId)
                         .update("comments", FieldValue.arrayUnion(trimmed))
-                    state.newComment.value = ""
+                    state.newComment.value = ""*/
+                    //use function to add comments//
+                    addComment(
+                        post = post,
+                        comment = trimmed,
+                        onSuccess ={
+                            state.comments.add(trimmed)
+                            state.newComment.value = ""
+                            focusManager.clearFocus()
+                        },
+                        onError = { e ->
+                            //handles error if comment can't be made//
+                            Log.e("CommentSection", "Error adding comment", e)
+                        }
+                    )
                 }
             },
             modifier = Modifier.align(Alignment.End),
@@ -307,10 +344,29 @@ fun CommentSection(post: Post, state: PostUIState) {
             Text("Post Comment")
         }
     }
-
+    //Handles focusing in attempt to fix bug where comments open the search before the comment textbox//
     LaunchedEffect(state.isCommentSectionVisible) {
         if (state.isCommentSectionVisible) {
-            focusRequester.requestFocus()
+            //multiple focus attempts with delays to help with the bug//
+            delay(100)
+            try { focusRequester.requestFocus() } catch (e: Exception) { }
+            delay(200)
+            try { focusRequester.requestFocus() } catch (e: Exception) { }
+            delay(300)
+            try { focusRequester.requestFocus() } catch (e: Exception) { }
+
+            //resets the flag after attempts//
+            state.shouldFocusComment.value = false
+
         }
     }
+}
+fun addComment(post: Post, comment: String, onSuccess: () -> Unit, onError: (Exception) -> Unit){
+    val db = FirebaseFirestore.getInstance()
+    val updatedComments = post.existingComments.toMutableList().apply{add(comment)}
+
+    db.collection("posts").document(post.postId)
+        .update("existingComments", updatedComments)
+        .addOnSuccessListener{onSuccess()}
+        .addOnFailureListener{ e -> onError(e)}
 }
