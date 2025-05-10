@@ -40,7 +40,7 @@ fun PublicProfileScreen(username: String, navController: NavController) {
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
 
     LaunchedEffect(username) {
-
+        // ✅ Check if already connected
         db.collection("connectRequests")
             .whereEqualTo("status", "accepted")
             .whereArrayContains("participants", currentUser)
@@ -51,13 +51,13 @@ fun PublicProfileScreen(username: String, navController: NavController) {
                 }
             }
 
-
+        // ✅ Get user info
         db.collection("users").document(username).get()
             .addOnSuccessListener { doc ->
                 bio = doc.getString("bio") ?: "No bio provided."
                 skills = doc.get("skills") as? List<String> ?: emptyList()
 
-
+                // ✅ Only load materials if connected
                 if (isConnected) {
                     val rawMaterials = doc.get("materials") as? List<Map<String, String>> ?: emptyList()
                     materials = rawMaterials.mapNotNull {
@@ -68,7 +68,7 @@ fun PublicProfileScreen(username: String, navController: NavController) {
                 }
             }
 
-
+        // ✅ Get user posts
         db.collection("posts")
             .whereEqualTo("username", username)
             .get()

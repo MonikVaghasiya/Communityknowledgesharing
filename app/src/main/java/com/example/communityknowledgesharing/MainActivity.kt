@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
             CommunityKnowledgeSharingTheme {
                 AppNavigation()
                 FirebaseFirestore.setLoggingEnabled(true)
-
+// Only call navigation here
             }
         }
     }

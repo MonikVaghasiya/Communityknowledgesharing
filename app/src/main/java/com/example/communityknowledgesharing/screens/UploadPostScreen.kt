@@ -142,7 +142,7 @@ fun UploadPostScreen(
     }
 }
 
-
+// Upload Image to Storage, then Upload Post
 private fun uploadImageAndPost(
     title: String,
     description: String,
@@ -166,7 +166,7 @@ private fun uploadImageAndPost(
         }
 }
 
-
+// Upload Post to Firestore
 private fun uploadPostToFirestore(
     title: String,
     description: String,
@@ -183,11 +183,8 @@ private fun uploadPostToFirestore(
         "description" to description,
         "imageUrl" to (imageUrl ?: ""),
         "videoUrl" to (videoUrl ?: ""),
-<<<<<<< HEAD
         "likeCount" to 0,
         "existingComments" to emptyList<String>(),
-=======
->>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
         "timestamp" to System.currentTimeMillis()
     )
 

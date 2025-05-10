@@ -32,7 +32,7 @@ fun LoginScreen(navController: NavController) {
 
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it.trim() },
+            onValueChange = { email = it.trim() }, // ✅ trims spaces
             label = { Text("Email") },
             modifier = Modifier.fillMaxWidth()
         )

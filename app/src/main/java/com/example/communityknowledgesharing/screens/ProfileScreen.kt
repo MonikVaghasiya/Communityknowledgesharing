@@ -61,7 +61,7 @@ fun ProfileScreen(navController: NavController) {
     var showProjectDialog by remember { mutableStateOf(false) }
     var showMaterialDialog by remember { mutableStateOf(false) }
 
-
+    // Load profile from Firestore
     LaunchedEffect(Unit) {
         FirebaseFirestore.getInstance().collection("users").document(uid).get()
             .addOnSuccessListener { doc ->

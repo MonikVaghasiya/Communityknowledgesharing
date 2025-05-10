@@ -71,7 +71,7 @@ fun SignupScreen(navController: NavController) {
                                 val user = auth.currentUser
                                 val uid = email.substringBefore("@")
 
-
+                                // ✅ Add default Firestore user data
                                 val newUserData = mapOf(
                                     "name" to uid,
                                     "email" to email,

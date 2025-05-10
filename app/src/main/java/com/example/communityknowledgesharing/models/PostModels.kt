@@ -6,32 +6,23 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 
-
+// 🐾 Data class for a Post (from Firestore)
 data class Post(
     val username: String,
     val title: String,
     val description: String,
     val imageUri: Uri? = null,
-<<<<<<< HEAD
-    val postId: String = "",
-    val existingComments: List<String> = emptyList(),
-    val likeCount: Int = 0,
-    val videoUrl: String? = null
-=======
-    val postId: String = "",                    // ✅ Firestore Document ID
+    val postId: String = "",                           // ✅ Firestore Document ID
     val existingComments: List<String> = emptyList(),  // ✅ Existing Comments
-    val videoUrl: String? = null //for the Youtube intent
->>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
+    val likeCount: Int = 0,                            // ✅ New: Initial like count from Firestore
+    val videoUrl: String? = null                       // 🎥 Optional: YouTube URL if available
 )
 
 data class PostUIState(
     var isLiked: Boolean = false,
     var likeCount: MutableState<Int> = mutableStateOf(0),
     var comments: SnapshotStateList<String> = mutableStateListOf(),
-    var newComment: MutableState<String> = mutableStateOf(""),
-<<<<<<< HEAD
+    var newComment: MutableState<String> = mutableStateOf(""),  // ✅ Required!
     var isCommentSectionVisible: Boolean = false,
-=======
->>>>>>> 210b782c3813453ddb8473976794a5ff005e8d84
-    var shouldFocusComment: MutableState<Boolean> = mutableStateOf(false)
+    var shouldFocusComment: MutableState<Boolean> = mutableStateOf(false)  // ✅ Required!
 )

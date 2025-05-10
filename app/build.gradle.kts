@@ -2,7 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.gms.google-services")
+    id("com.google.gms.google-services") // ✅ Plugin must be applied here
 }
 
 android {
@@ -47,10 +47,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
 
-
+    // Compose BOM (this handles versions of all Compose dependencies, including material3)
     implementation(platform("androidx.compose:compose-bom:2024.04.01"))
     implementation("androidx.compose.material3:material3")
-
+// ✅ do NOT specify version
 
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
